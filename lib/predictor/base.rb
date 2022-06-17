@@ -108,7 +108,10 @@ module Predictor::Base
 
   def related_items(item)
     keys = []
+
     input_matrices.each do |key, matrix|
+      next if matrix.weight == 0.0
+
       sets = Predictor.redis.smembers(matrix.redis_key(:sets, item))
       keys.concat(sets.map { |set| matrix.redis_key(:items, set) })
     end
