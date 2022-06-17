@@ -455,7 +455,7 @@ describe Predictor::Base do
       sm.anotherinput.add_to_set('a', "foo", "bar")
       sm.yetanotherinput.add_to_set('b', "fnord", "shmoo")
       expect(sm.all_items).to include("foo", "bar", "fnord", "shmoo")
-      expect(sm).to receive(:process_items!).with(*sm.all_items)
+      expect(sm).to receive(:process_items!).with(*sm.all_items, skip_related: true)
       sm.process!
     end
   end

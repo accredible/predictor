@@ -201,14 +201,14 @@ module Predictor::Base
     process_items!(item)  # Old method
   end
 
-  def process_items!(*items)
+  def process_items!(*items, skip_related: false)
     items = items.flatten if items.count == 1 && items[0].is_a?(Array) # Old syntax
 
     case self.class.get_processing_technique
     when :lua
       matrix_data = {}
       input_matrices.each do |name, matrix|
-        matrix_data[name] = {weight: matrix.weight, measure: matrix.measure_name}
+        matrix_data[name] = { weight: matrix.weight, measure: matrix.measure_name }
       end
       matrix_json = JSON.dump(matrix_data)
 
@@ -217,34 +217,42 @@ module Predictor::Base
       end
     when :union
       items.each do |item|
-        keys    = []
-        weights = []
-
-        input_matrices.each do |key, matrix|
-          k = matrix.redis_key(:sets, item)
-          item_keys = Predictor.redis.smembers(k).map { |set| matrix.redis_key(:items, set) }
-
-          counts = Predictor.redis.multi do |multi|
-            item_keys.each { |key| Predictor.redis.scard(key) }
-          end
-
-          item_keys.zip(counts).each do |key, count|
-            unless count.zero?
-              keys << key
-              weights << matrix.weight / count
-            end
-          end
+        items_to_process = if skip_related
+          [item]
+        else
+          related_items(item).push(item)
         end
 
-        Predictor.redis.multi do |multi|
-          key = redis_key(:similarities, item)
-          multi.del(key)
+        items_to_process.each do |item_to_process|
+          keys    = []
+          weights = []
 
-          if keys.any?
-            multi.zunionstore(key, keys, weights: weights)
-            multi.zrem(key, item)
-            multi.zremrangebyrank(key, 0, -(similarity_limit + 1))
-            multi.zunionstore key, [key] # Rewrite zset for optimized storage.
+          input_matrices.each do |key, matrix|
+            k = matrix.redis_key(:sets, item_to_process)
+            item_keys = Predictor.redis.smembers(k).map { |set| matrix.redis_key(:items, set) }
+
+            counts = Predictor.redis.multi do |multi|
+              item_keys.each { |key| Predictor.redis.scard(key) } # rubocop:disable Lint/ShadowingOuterLocalVariable
+            end
+
+            item_keys.zip(counts).each do |key, count| # rubocop:disable Lint/ShadowingOuterLocalVariable
+              unless count.zero?
+                keys << key
+                weights << matrix.weight / count
+              end
+            end
+          end
+
+          Predictor.redis.multi do |multi|
+            key = redis_key(:similarities, item_to_process)
+            multi.del(key)
+
+            if keys.any?
+              multi.zunionstore(key, keys, weights: weights)
+              multi.zrem(key, item_to_process)
+              multi.zremrangebyrank(key, 0, -(similarity_limit + 1))
+              multi.zunionstore key, [key] # Rewrite zset for optimized storage.
+            end
           end
         end
       end
@@ -254,12 +262,12 @@ module Predictor::Base
       end
     end
 
-    return self
+    return self # rubocop:disable Style/RedundantReturn
   end
 
   def process!
-    process_items!(*all_items)
-    return self
+    process_items!(*all_items, skip_related: true)
+    return self # rubocop:disable Style/RedundantReturn
   end
 
   def delete_from_matrix!(matrix, item)
