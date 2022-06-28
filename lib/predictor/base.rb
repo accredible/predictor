@@ -228,6 +228,8 @@ module Predictor::Base
           weights = []
 
           input_matrices.each do |key, matrix|
+            next if matrix.weight == 0.0
+
             k = matrix.redis_key(:sets, item_to_process)
             item_keys = Predictor.redis.smembers(k).map { |set| matrix.redis_key(:items, set) }
 
