@@ -283,7 +283,6 @@ module Predictor::Base
   def delete_pair_from_matrix!(matrix, set, item)
     items = related_items(item)
     input_matrices[matrix].remove_from_set(set, item)
-    items.each { |related_item| cache_similarity(item, related_item) }
     return self
   end
 
