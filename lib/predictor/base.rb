@@ -272,6 +272,15 @@ module Predictor::Base
     return self # rubocop:disable Style/RedundantReturn
   end
 
+  def delete_from_matrix(matrix, item)
+    # Deleting from a specific matrix without triggering similarity
+    # calculations of related items
+
+    input_matrices[matrix].delete_item(item)
+
+    return self
+  end
+
   def delete_from_matrix!(matrix, item)
     # Deleting from a specific matrix, so get related_items, delete, then update the similarity of those related_items
     items = related_items(item)
